@@ -592,9 +592,9 @@ Sunday: Closed
 
 // Function to make actual API request
 async function makeApiRequest(url: string): Promise<ScrapeResponse> {
-  const baseApi = process.env.NEXT_PUBLIC_BASE_API || process.env.BASE_API
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY || process.env.API_KEY
-  const timeout = Number(process.env.NEXT_PUBLIC_API_TIMEOUT) || 45000
+  const baseApi = process.env.NEXT_PUBLIC_BASE_API;
+  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+  const timeout = Number(process.env.NEXT_PUBLIC_API_TIMEOUT) || 45000;
 
   if (!baseApi) {
     throw new Error("API endpoint not configured")
@@ -688,11 +688,11 @@ export async function analyzeIntelligence(url: string): Promise<any> {
   let scrapeResult: ScrapeResponse
 
   try {
-    // Try to make actual API request if BASE_API is configured
-    const baseApi = process.env.NEXT_PUBLIC_BASE_API || process.env.BASE_API
+    // Try to make actual API request if NEXT_PUBLIC_BASE_API is configured
+    const baseApi = process.env.NEXT_PUBLIC_BASE_API
 
     if (baseApi) {
-      console.log("Using real API:", baseApi)
+      console.log("Using real API (NEXT_PUBLIC_BASE_API):", baseApi)
       scrapeResult = await makeApiRequest(url)
     } else {
       console.log("Using mock data - no API configured")
