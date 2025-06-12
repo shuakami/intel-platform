@@ -17,577 +17,14 @@ interface ScrapeResponse {
   }
 }
 
-interface MockScrapeData {
-  [key: string]: {
-    title: string
-    markdown: string
-    description?: string
-    language?: string
-  }
+interface BatchScrapeResponse {
+  status: "completed" | "processing" | "failed"
+  data: ScrapeResponse[]
 }
 
-// Mock data for different websites - should look like actual scraped content
-const mockScrapeData: MockScrapeData = {
-  "bbc.com": {
-    title: "BBC News - Technology",
-    description: "Latest technology news from BBC",
-    language: "en",
-    markdown: `# Technology
-
-## Latest Technology News
-
-### UK threatens to sue Abramovich over Chelsea sale
-
-The proceeds have been frozen since the UK government forced the club's sale following Russia's invasion of Ukraine.
-
-*8 hrs ago | Business*
-
-The UK government has threatened to take legal action against Roman Abramovich over the sale of Chelsea Football Club. The proceeds from the £4.25bn sale have been frozen in a government account since May 2022.
-
-Government sources say they are prepared to sue the Russian oligarch if he does not comply with undertakings he gave when the club was sold.
-
-### Tesla is 'not interested' in producing cars in India - minister
-
-*4 hrs ago | Asia*
-
-This is the first time India has publicly admitted that it has not been able to lure investment dollars from Musk.
-
-India's road transport minister Nitin Gadkari has said that Tesla is "not interested" in manufacturing cars in India, marking the first time a government official has publicly acknowledged the setback.
-
-The comments come after years of negotiations between the electric vehicle maker and Indian officials over potential investment in the country.
-
-### Doctor describes 'total carnage' as 27 reported killed by Israeli fire at Gaza aid centre
-
-*LIVE* 
-
-For a third day running, Palestinians have been killed while collecting aid - the IDF confirms it fired shots and is investigating.
-
-A doctor at a hospital in Gaza has described scenes of "total carnage" after 27 people were reportedly killed by Israeli fire at an aid distribution centre.
-
-The incident occurred as Palestinians were collecting food aid in Gaza City. The Israeli military has confirmed it opened fire and says it is investigating the circumstances.
-
-### New Madeleine McCann search under way in Portugal
-
-*43 mins ago | Europe*
-
-Authorities say the new search will be across 21 plots and will continue until Friday.
-
-Portuguese police have begun a new search for missing British girl Madeleine McCann in the Algarve region.
-
-The search is being conducted across 21 plots of land near the resort of Praia da Luz, where the three-year-old disappeared in 2007.
-
-### Lady Gaga and Pulp rumoured for surprise Glastonbury sets as full line-up revealed
-
-*2 hrs ago | Somerset*
-
-With three weeks to go, the UK's biggest festival unveils its full line-up, plus a few mystery sets.
-
-Glastonbury Festival has revealed its full line-up for 2024, with rumours circulating about surprise performances by Lady Gaga and Pulp.
-
-The festival, which takes place from 26-30 June at Worthy Farm in Somerset, will be headlined by Dua Lipa, Coldplay and SZA.
-
----
-
-## More Technology Stories
-
-- **Apple announces new AI features** - The tech giant reveals plans for artificial intelligence integration across its devices
-- **Cybersecurity threats on the rise** - Experts warn of increasing attacks on critical infrastructure  
-- **Electric vehicle sales surge** - Global EV sales reach record highs in Q1 2024
-- **Social media regulation debate** - Governments worldwide consider new rules for tech platforms
-
-## Navigation
-
-- [Home](/)
-- [News](/news)
-- [Sport](/sport)
-- [Business](/business)
-- [Innovation](/innovation)
-- [Culture](/culture)`,
-  },
-  "github.com": {
-    title: "GitHub: Let's build from here",
-    description: "GitHub is where over 100 million developers shape the future of software, together.",
-    language: "en",
-    markdown: `# GitHub: Let's build from here
-
-The complete developer platform to build, scale, and deliver secure software.
-
-## Sign up for GitHub
-
-**Email address**
-
-[Sign up for GitHub]
-
-By creating an account, you agree to the [Terms of Service](). For more information about GitHub's privacy practices, see the [GitHub Privacy Statement]().
-
-## Trusted by the world's leading organizations ↘︎
-
-[Stripe] [Pinterest] [KLM] [Mercedes-Benz] [P&G] [Telus]
-
-## Productivity
-
-**GitHub Copilot**
-Don't fly solo. Try 30 days for free.
-
-GitHub Copilot empowers developers to complete tasks 55% faster with contextualized AI coding assistance across workflows.
-
-[Start building with Copilot]
-
-**GitHub Codespaces**
-Spin up fresh, fully configured dev environments in the cloud—and code, build, test, and debug right from your browser.
-
-## Collaboration
-
-**Pull requests**
-Propose changes to your code and collaborate on those changes with your team. You can discuss implementations before merging.
-
-**GitHub Issues**
-Coordinate work, track bugs, and discuss features with integrated project management tools.
-
-**GitHub Discussions**
-Ask questions, share information, make announcements, and conduct conversations about your project.
-
-## Security
-
-**GitHub Advanced Security**
-Secure your code as you write it. Vulnerability scanning, dependency insights, and secret scanning.
-
-**Code scanning**
-Find and fix vulnerabilities in your code using CodeQL and third-party tools.
-
-**Secret scanning**
-Get alerted when secrets are pushed to your repository.
-
-**Dependency insights**
-See your dependencies and get alerted about vulnerabilities.
-
-## Popular repositories
-
-### microsoft/vscode
-Visual Studio Code
-⭐ 142k | 🍴 25.1k | TypeScript
-
-### facebook/react  
-The library for web and native user interfaces
-⭐ 215k | 🍴 44.8k | JavaScript
-
-### tensorflow/tensorflow
-An Open Source Machine Learning Framework for Everyone
-⭐ 180k | 🍴 73.9k | C++
-
-### kubernetes/kubernetes
-Production-Grade Container Scheduling and Management
-⭐ 104k | 🍴 38.2k | Go
-
-## GitHub for teams
-
-**GitHub Team**
-Advanced collaboration for your growing team.
-$4 per user/month
-
-**GitHub Enterprise**
-Advanced security and compliance for enterprises.
-$21 per user/month
-
-[Contact sales]
-
----
-
-© 2024 GitHub, Inc.
-[Terms] [Privacy] [Security] [Status] [Docs] [Contact GitHub] [Pricing] [API] [Training] [Blog] [About]`,
-  },
-  "news.": {
-    title: "Breaking News - Latest Headlines",
-    description: "Stay informed with the latest breaking news and updates",
-    language: "en",
-    markdown: `# Breaking News
-
-## Top Headlines
-
-### Global Markets React to Economic Indicators
-*2 hours ago*
-
-Financial markets worldwide showed mixed reactions today following the release of key economic indicators from major economies. The Dow Jones fell 0.3% while European markets remained relatively stable.
-
-Key points:
-- US inflation data came in slightly above expectations at 3.2%
-- European Central Bank hints at potential rate adjustments
-- Asian markets closed mixed with Tokyo up 0.8%
-
-### Climate Summit Reaches Key Agreement
-*4 hours ago*
-
-World leaders at the Global Climate Summit have reached a breakthrough agreement on carbon emission reduction targets for the next decade.
-
-The agreement includes:
-- 50% reduction in global emissions by 2030
-- $100 billion fund for developing nations
-- New renewable energy initiatives
-
-### Technology Sector Sees Major Merger
-*6 hours ago*
-
-Two major technology companies announced a strategic merger worth $45 billion, creating one of the largest tech conglomerates in the industry.
-
-Details of the merger:
-- Expected completion by Q3 2024
-- Combined workforce of over 200,000 employees
-- Focus on AI and cloud computing services
-
-### Sports Championship Finals
-*8 hours ago*
-
-The championship finals concluded with exciting matches across multiple sports leagues.
-
-Results:
-- Basketball: Lakers defeat Celtics 108-102
-- Soccer: Manchester United wins Premier League
-- Tennis: Djokovic advances to Wimbledon final
-
-### Health Research Breakthrough
-*10 hours ago*
-
-Scientists at leading research institutions announced a significant breakthrough in cancer treatment research, showing promising results in early clinical trials.
-
-The research findings:
-- 85% success rate in Phase II trials
-- New immunotherapy approach
-- Potential FDA approval by 2025
-
-## Weather Update
-
-**Today's Forecast**
-- High: 75°F (24°C)
-- Low: 58°F (14°C)  
-- Partly cloudy with chance of rain
-
-## Market Watch
-
-**Stock Indices**
-- S&P 500: 4,235.12 (-0.2%)
-- NASDAQ: 13,102.55 (+0.1%)
-- FTSE 100: 7,445.32 (-0.1%)
-
-**Currency Exchange**
-- USD/EUR: 1.0845
-- USD/GBP: 1.2634
-- USD/JPY: 149.23
-
----
-
-*Last updated: ${new Date().toLocaleString()}*`,
-  },
-  "gov.": {
-    title: "Official Government Website",
-    description: "Official government information and services",
-    language: "en",
-    markdown: `# Government Official Website
-
-## Welcome to the Official Government Portal
-
-This is the official website of the government, providing citizens with access to government services, information, and resources.
-
-## Latest Announcements
-
-### New Policy Implementation
-*Published: March 15, 2024*
-
-The government has announced the implementation of new policies effective April 1, 2024. These policies aim to improve public services and enhance citizen welfare.
-
-**Key Changes:**
-- Enhanced digital services platform
-- Streamlined application processes
-- Improved customer support
-
-### Budget Allocation for Infrastructure
-*Published: March 10, 2024*
-
-The government has allocated $2.5 billion for infrastructure development projects across the country.
-
-**Project Areas:**
-- Transportation networks
-- Digital infrastructure
-- Healthcare facilities
-- Educational institutions
-
-### Public Health Initiative
-*Published: March 5, 2024*
-
-A new public health initiative has been launched to promote community wellness and preventive healthcare.
-
-**Program Components:**
-- Free health screenings
-- Vaccination campaigns
-- Health education programs
-- Mental health support services
-
-## Government Services
-
-### Online Services
-- Tax filing and payments
-- License renewals
-- Permit applications
-- Benefits enrollment
-
-### Citizen Resources
-- Government directory
-- Public records access
-- Legal aid services
-- Emergency contacts
-
-### Business Services
-- Business registration
-- Regulatory compliance
-- Procurement opportunities
-- Economic development programs
-
-## Departments
-
-### Department of Health
-Responsible for public health policy and healthcare services.
-
-### Department of Education
-Oversees educational standards and public school systems.
-
-### Department of Transportation
-Manages transportation infrastructure and public transit.
-
-### Department of Finance
-Handles government budgets and financial planning.
-
-## Contact Information
-
-**Main Office**
-123 Government Plaza
-Capital City, State 12345
-
-**Phone:** (555) 123-4567
-**Email:** info@government.gov
-**Hours:** Monday-Friday, 8:00 AM - 5:00 PM
-
-## Emergency Services
-- Police: 911
-- Fire Department: 911
-- Medical Emergency: 911
-- Non-Emergency: (555) 311-0000
-
----
-
-*This website is maintained by the Government Information Technology Department*
-*Last updated: ${new Date().toLocaleDateString()}*`,
-  },
-  "edu.": {
-    title: "University Homepage",
-    description: "Leading institution of higher education and research",
-    language: "en",
-    markdown: `# University of Excellence
-
-## Welcome to Our Academic Community
-
-Founded in 1875, the University of Excellence is a leading institution of higher education committed to academic excellence, innovative research, and community service.
-
-## Quick Links
-
-- [Apply Now](/) | [Visit Campus](/) | [Student Portal](/) | [Faculty Directory](/)
-
-## Latest News
-
-### Research Breakthrough in Renewable Energy
-*March 18, 2024*
-
-Our engineering department has achieved a significant breakthrough in solar panel efficiency, increasing energy conversion rates by 25%.
-
-### New Medical School Building Opens
-*March 15, 2024*
-
-The state-of-the-art medical education facility officially opened, featuring advanced simulation labs and research centers.
-
-### Student Achievement Recognition
-*March 12, 2024*
-
-Five students received national awards for their outstanding research in artificial intelligence and machine learning.
-
-## Academic Programs
-
-### Undergraduate Programs
-- **College of Arts & Sciences** - Liberal arts, sciences, and humanities
-- **School of Engineering** - Computer science, electrical, mechanical engineering
-- **Business School** - Finance, marketing, management, entrepreneurship
-- **School of Medicine** - Pre-med, nursing, public health
-
-### Graduate Programs
-- **Master's Degrees** - 45+ programs across all disciplines
-- **Doctoral Programs** - PhD programs in 30+ fields
-- **Professional Schools** - Law, medicine, business, education
-
-### Online Learning
-- Distance education programs
-- Hybrid learning options
-- Professional development courses
-- Continuing education
-
-## Research Excellence
-
-### Research Centers
-- **Institute for Advanced Computing** - AI and machine learning research
-- **Center for Sustainable Energy** - Renewable energy solutions
-- **Medical Research Institute** - Clinical trials and biomedical research
-- **Social Policy Research Center** - Public policy analysis
-
-### Funding & Grants
-- $150M in annual research funding
-- 200+ active research projects
-- Partnerships with industry leaders
-- Government research contracts
-
-## Campus Life
-
-### Student Organizations
-- 150+ student clubs and organizations
-- Greek life with 25 chapters
-- Student government association
-- Honor societies and academic clubs
-
-### Athletics
-- **Division I Sports** - 18 varsity teams
-- **Intramural Sports** - 20+ recreational leagues
-- **Fitness Centers** - 3 campus recreation facilities
-- **School Spirit** - Eagles athletics program
-
-### Housing & Dining
-- 12 residence halls
-- 8 dining locations
-- Meal plans available
-- Campus safety services
-
-## Admissions
-
-### Application Requirements
-- Completed application form
-- Official transcripts
-- Standardized test scores (SAT/ACT)
-- Letters of recommendation
-- Personal statement
-
-### Important Dates
-- **Early Decision:** November 15
-- **Regular Decision:** January 15
-- **Transfer Applications:** March 1
-- **Graduate Applications:** Varies by program
-
-### Financial Aid
-- Merit-based scholarships
-- Need-based financial aid
-- Work-study programs
-- Student loan assistance
-
-## Contact Information
-
-**Admissions Office**
-Phone: (555) 123-UNIV
-Email: admissions@university.edu
-
-**Main Campus**
-456 University Avenue
-College Town, State 67890
-
-**Campus Tours**
-Available Monday-Saturday
-Register online or call (555) 123-TOUR
-
----
-
-*Accredited by the Higher Learning Commission*
-*Equal Opportunity Institution*`,
-  },
-  default: {
-    title: "Welcome to Our Website",
-    description: "Your trusted source for information and services",
-    language: "en",
-    markdown: `# Welcome to Our Website
-
-## About Us
-
-We are dedicated to providing excellent service and valuable information to our visitors. Our website offers a comprehensive range of resources and tools to meet your needs.
-
-## Our Services
-
-### Professional Services
-We offer a wide range of professional services designed to help individuals and businesses achieve their goals.
-
-- Consulting and advisory services
-- Technical support and maintenance
-- Training and development programs
-- Custom solutions and implementations
-
-### Customer Support
-Our dedicated customer support team is available to assist you with any questions or concerns.
-
-**Contact Methods:**
-- Phone: (555) 123-4567
-- Email: support@website.com
-- Live chat: Available 24/7
-- Help center: Comprehensive FAQ and guides
-
-## Latest Updates
-
-### New Feature Release
-*March 20, 2024*
-
-We're excited to announce the launch of our new user dashboard, featuring improved navigation and enhanced functionality.
-
-### System Maintenance Notice
-*March 18, 2024*
-
-Scheduled maintenance will occur this weekend from 2:00 AM to 6:00 AM EST. Some services may be temporarily unavailable.
-
-### Partnership Announcement
-*March 15, 2024*
-
-We've partnered with leading industry providers to offer expanded services and better value to our customers.
-
-## Resources
-
-### Documentation
-- User guides and tutorials
-- API documentation
-- Best practices and tips
-- Video tutorials and webinars
-
-### Community
-- User forums and discussions
-- Expert advice and insights
-- Networking opportunities
-- Events and workshops
-
-## Getting Started
-
-1. **Create an Account** - Sign up for free access to our services
-2. **Explore Features** - Browse our comprehensive feature set
-3. **Get Support** - Access help when you need it
-4. **Join Community** - Connect with other users
-
-## Contact Information
-
-**Main Office**
-123 Business Street
-City, State 12345
-
-**Business Hours**
-Monday - Friday: 9:00 AM - 6:00 PM
-Saturday: 10:00 AM - 4:00 PM
-Sunday: Closed
-
-**Social Media**
-- Twitter: @ourwebsite
-- LinkedIn: /company/ourwebsite
-- Facebook: /ourwebsite
-
----
-
-*© 2024 Our Website. All rights reserved.*
-*Privacy Policy | Terms of Service | Cookie Policy*`,
-  },
+interface CrawlResponse {
+  status: "scraping" | "completed" | "failed" | "cancelled"
+  data: ScrapeResponse[]
 }
 
 // Function to make actual API request
@@ -645,36 +82,101 @@ async function makeApiRequest(url: string): Promise<ScrapeResponse> {
   }
 }
 
-// Function to get mock data based on URL
-function getMockData(url: string): ScrapeResponse {
-  let mockData = mockScrapeData.default
+// Function to make actual API request for a batch of URLs
+async function makeBatchApiRequest(urls: string[]): Promise<{ success: boolean, id: string }> {
+  const baseApi = process.env.NEXT_PUBLIC_BASE_API
+  const apiKey = process.env.NEXT_PUBLIC_API_KEY
+  const timeout = Number(process.env.NEXT_PUBLIC_API_TIMEOUT) || 45000
 
-  // Find matching domain
-  const domains = Object.keys(mockScrapeData)
-  for (const domain of domains) {
-    if (domain !== "default" && url.includes(domain)) {
-      mockData = mockScrapeData[domain]
-      break
-    }
+  if (!baseApi) {
+    throw new Error("API endpoint not configured")
   }
 
-  return {
-    success: true,
-    data: {
-      markdown: mockData.markdown,
-      metadata: {
-        title: mockData.title,
-        description: mockData.description,
-        language: mockData.language || "en",
-        sourceURL: url,
-        url: url,
+  const apiUrl = `${baseApi}/v1/batch/scrape`
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  }
+
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`
+  }
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      urls: urls,
+      formats: ["markdown"],
+      onlyMainContent: true,
+      timeout: timeout,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status}`)
+  }
+
+  return await response.json()
+}
+
+async function checkBatchScrapeStatus(jobId: string): Promise<BatchScrapeResponse> {
+  const baseApi = process.env.NEXT_PUBLIC_BASE_API
+  const apiKey = process.env.NEXT_PUBLIC_API_KEY
+
+  if (!baseApi) {
+    throw new Error("API endpoint not configured")
+  }
+
+  const apiUrl = `${baseApi}/v1/batch/scrape/${jobId}`
+
+  const headers: Record<string, string> = {}
+
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`
+  }
+
+  const response = await fetch(apiUrl, { headers })
+
+  if (!response.ok) {
+    throw new Error(`Failed to check batch status: ${response.status}`)
+  }
+
+  const result = await response.json()
+
+  // The actual scraped data is nested, let's normalize it to match our ScrapeResponse type
+  if (result.data && Array.isArray(result.data)) {
+    result.data = result.data.map((item: any, index: number) => ({
+      success: item.metadata.statusCode === 200,
+      data: {
+        markdown: item.markdown,
+        metadata: {
+          title: item.metadata?.title || "Untitled",
+          description: item.metadata?.description,
+          language: item.metadata?.language,
+          sourceURL: item.metadata?.sourceURL || item.metadata?.url,
+          url: item.metadata?.url,
+        },
       },
-    },
+    }));
   }
+
+
+  return result
 }
 
 // Main function to analyze intelligence based on URL
-export async function analyzeIntelligence(url: string): Promise<any> {
+export async function analyzeIntelligence(
+  url: string | string[]
+): Promise<any> {
+  if (Array.isArray(url)) {
+    return analyzeMultipleIntelligence(url)
+  } else {
+    return analyzeSingleIntelligence(url)
+  }
+}
+
+async function analyzeSingleIntelligence(url: string): Promise<any> {
   // Validate URL format
   try {
     new URL(url)
@@ -688,19 +190,10 @@ export async function analyzeIntelligence(url: string): Promise<any> {
   let scrapeResult: ScrapeResponse
 
   try {
-    // Try to make actual API request if NEXT_PUBLIC_BASE_API is configured
-    const baseApi = process.env.NEXT_PUBLIC_BASE_API
-
-    if (baseApi) {
-      console.log("Using real API (NEXT_PUBLIC_BASE_API):", baseApi)
-      scrapeResult = await makeApiRequest(url)
-    } else {
-      console.log("Using mock data - no API configured")
-      scrapeResult = getMockData(url)
-    }
+    scrapeResult = await makeApiRequest(url)
   } catch (error) {
-    console.warn("API request failed, falling back to mock data:", error)
-    scrapeResult = getMockData(url)
+    console.error("API request failed:", error)
+    throw error
   }
 
   // Process the scraped content
@@ -723,6 +216,80 @@ export async function analyzeIntelligence(url: string): Promise<any> {
     collectionData: marked.parse(analysis.collection),
     reportData: marked.parse(analysis.report),
   }
+}
+
+async function analyzeMultipleIntelligence(urls: string[]): Promise<any[]> {
+  // Validate URL formats
+  urls.forEach(url => {
+    try {
+      new URL(url);
+    } catch {
+      throw new Error(`Invalid URL format: ${url}`);
+    }
+  });
+
+  // Simulate processing delay
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  let jobResult: { success: boolean, id: string };
+
+  try {
+    jobResult = await makeBatchApiRequest(urls);
+    if (!jobResult.success) {
+      throw new Error("Failed to submit batch scrape job.");
+    }
+  } catch (error) {
+    console.error("API batch request failed:", error);
+    throw error;
+  }
+
+  // Poll for the result
+  const maxWaitTime = 120000; // 2 minutes
+  const pollInterval = 5000; // 5 seconds
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWaitTime) {
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
+    const statusResult = await checkBatchScrapeStatus(jobResult.id);
+
+    if (statusResult.status === "completed") {
+      // Process each scraped content
+      return statusResult.data.map(result => {
+        if (!result || !result.success) {
+          return {
+            url: result?.data?.metadata?.url || "Unknown URL",
+            error: "Failed to scrape this URL.",
+            rawMarkdown: "",
+            htmlContent: "",
+            feedbackData: "",
+            collectionData: "",
+            reportData: ""
+          };
+        }
+
+        const { markdown, metadata } = result.data;
+        const htmlContent = marked.parse(markdown);
+        const analysis = generateAnalysis(markdown, metadata, metadata.url);
+
+        return {
+          url: metadata.url,
+          title: metadata.title,
+          description: metadata.description,
+          language: metadata.language,
+          rawMarkdown: markdown,
+          htmlContent: htmlContent,
+          feedbackData: marked.parse(analysis.feedback),
+          collectionData: marked.parse(analysis.collection),
+          reportData: marked.parse(analysis.report),
+        };
+      });
+    } else if (statusResult.status === "failed") {
+      throw new Error("Batch scrape job failed.");
+    }
+    // If status is "processing", continue polling
+  }
+
+  throw new Error("Batch scrape job timed out.");
 }
 
 // Function to generate analysis based on scraped content

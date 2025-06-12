@@ -20,14 +20,6 @@ export default function Header() {
           </div>
         </div>
       </div>
-      <div className="flex gap-2">
-        <Button variant="ghost" size="icon" className="intel-button h-10 w-10">
-          <History className="h-5 w-5" />
-        </Button>
-        <Button variant="ghost" size="icon" className="intel-button h-10 w-10">
-          <Settings className="h-5 w-5" />
-        </Button>
-      </div>
     </header>
   )
 }

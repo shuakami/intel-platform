@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -10,54 +10,135 @@ import { useIntelStore } from "@/lib/store"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 export default function IntelligenceQA() {
-  const { rawMarkdown, analysisStatus } = useIntelStore()
-  const [open, setOpen] = useState(false)
+  const {
+    reports,
+    analysisStatus,
+    isQaPanelOpen,
+    setQaPanelOpen,
+    analysisMode,
+    crawlReportGroups,
+  } = useIntelStore()
   const [question, setQuestion] = useState("")
-  const [conversation, setConversation] = useState<{ role: 'user' | 'assistant', content: string }[]>([])
+  const [conversation, setConversation] = useState<
+    { role: "user" | "assistant"; content: string }[]
+  >([
+    {
+      role: "assistant",
+      content:
+        "你好！我已经学习并分析了你提供的所有网页内容。现在，你可以就这些内容向我提问了。",
+    },
+  ])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const conversationEndRef = useRef<HTMLDivElement>(null)
 
-  // Effect to open/close dialog and reset states based on global store changes
-  useEffect(() => {
-    if (rawMarkdown && analysisStatus === "active") {
-      setConversation([]) // Always clear conversation for a new session
-      setQuestion("")      // Always clear question input for a new session
-      setError("")         // Always clear previous errors for a new session
-      setOpen(true)        // Then open the dialog
-    } else if (analysisStatus !== "processing" && analysisStatus !== "active") {
-      // Close if not processing and not meant to be active (e.g., idle, error, or data reset)
-      setOpen(false)
+  const { combinedMarkdown, sourceCount } = useMemo(() => {
+    let markdown = ""
+    let count = 0
+
+    if (analysisMode === "crawl") {
+      markdown =
+        crawlReportGroups
+          .flatMap((group) => group.reports)
+          .map((r) => r.rawMarkdown)
+          .filter((md): md is string => !!md)
+          .join("\n\n---\n\n")
+      count = crawlReportGroups.reduce(
+        (acc, group) => acc + group.reports.length,
+        0
+      )
+    } else {
+      markdown =
+        reports
+          .map((r) => r.rawMarkdown)
+          .filter((md): md is string => !!md)
+          .join("\n\n---\n\n")
+      count = reports.length
     }
-  }, [rawMarkdown, analysisStatus]) // Dependencies: trigger when these change
+    return { combinedMarkdown: markdown, sourceCount: count }
+  }, [analysisMode, reports, crawlReportGroups])
+
+  useEffect(() => {
+    if (
+      analysisStatus === "active" &&
+      (reports.length > 0 || crawlReportGroups.length > 0) &&
+      analysisMode !== "report"
+    ) {
+      setQaPanelOpen(true)
+    }
+  }, [
+    analysisStatus,
+    reports,
+    crawlReportGroups,
+    setQaPanelOpen,
+    analysisMode,
+  ])
+
+  useEffect(() => {
+    console.log(
+      `[QA] Reset-Effect triggered. Status: ${analysisStatus}, Reports: ${reports.length}, Groups: ${crawlReportGroups.length}`
+    )
+    // When a new analysis starts (processing), or when data is cleared,
+    // or when the component is reset to its initial state (idle),
+    if (
+      analysisStatus === "idle" ||
+      analysisStatus === "processing" ||
+      (reports.length === 0 && crawlReportGroups.length === 0)
+    ) {
+      console.log("[QA] Conditions met. Resetting conversation.")
+      setConversation([
+        {
+          role: "assistant",
+          content:
+            "你好！我已经学习并分析了你提供的所有网页内容。现在，你可以就这些内容向我提问了。",
+        },
+      ])
+      setError(null)
+      setLoading(false)
+    }
+  }, [analysisStatus, reports, crawlReportGroups])
 
   const handleAsk = async () => {
-    if (!question.trim()) return
+    if (!question.trim() || !combinedMarkdown) return
     const currentQuestion = question.trim()
     setLoading(true)
     setError("")
-    setConversation(prev => [...prev, { role: 'user', content: currentQuestion }])
+    setConversation(prev => [...prev, { role: "user", content: currentQuestion }])
     setQuestion("")
 
     try {
       const res = await fetch("/api/llm-handler", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ markdownContent: rawMarkdown, userPrompt: currentQuestion })
+        body: JSON.stringify({
+          markdownContent: combinedMarkdown,
+          userPrompt: currentQuestion,
+        }),
       })
       const data = await res.json()
       if (data.response) {
-        setConversation(prev => [...prev, { role: 'assistant', content: data.response }])
+        setConversation(prev => [
+          ...prev,
+          { role: "assistant", content: data.response },
+        ])
       } else {
-        const errorMessage = data.error || "LLM未返回有效内容，请检查API配置或稍后再试。"
+        const errorMessage =
+          data.error || "LLM未返回有效内容，请检查API配置或稍后再试。"
         setError(errorMessage)
-        setConversation(prev => [...prev, { role: 'assistant', content: `错误: ${errorMessage}` }])
+        setConversation(prev => [
+          ...prev,
+          { role: "assistant", content: `错误: ${errorMessage}` },
+        ])
       }
     } catch (e: any) {
-      const errorMessage = e.message || "与LLM通信失败，请检查网络或API服务。"
+      const errorMessage =
+        e.message || "与LLM通信失败，请检查网络或API服务。"
       setError(errorMessage)
-      setConversation(prev => [...prev, { role: 'assistant', content: `错误: ${errorMessage}` }])
+      setConversation(prev => [
+        ...prev,
+        { role: "assistant", content: `错误: ${errorMessage}` },
+      ])
     } finally {
       setLoading(false)
     }
@@ -65,10 +146,10 @@ export default function IntelligenceQA() {
 
   // Focus input when dialog opens or conversation updates (for quick follow-up)
   useEffect(() => {
-    if (open && !loading && inputRef.current) {
+    if (isQaPanelOpen && !loading && inputRef.current) {
       inputRef.current.focus()
     }
-  }, [open, loading, conversation])
+  }, [isQaPanelOpen, loading, conversation])
 
   // Scroll to the end of conversation when new messages are added
   useEffect(() => {
@@ -77,84 +158,135 @@ export default function IntelligenceQA() {
 
   const handleDialogClose = (isOpen: boolean) => {
     // This function is called by Radix Dialog onOpenChange
-    // We primarily manage `open` state via the useEffect hook listening to `rawMarkdown` and `analysisStatus`
-    // However, if user manually closes (e.g. ESC key or overlay click), we should update our state.
     if (!isOpen) {
-      setOpen(false) 
-      // Optional: decide if other state like conversation should be cleared here or rely on next open trigger
+      setQaPanelOpen(false)
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleDialogClose}>
-      <DialogContent className="max-w-2xl bg-slate-900/95 border-cyan-700/50 text-slate-50 shadow-2xl backdrop-blur-md max-h-[85vh] flex flex-col">
-        <DialogHeader className="mb-3 shrink-0">
-          <DialogTitle className="text-xl flex items-center text-cyan-400">
-            <Bot className="w-6 h-6 mr-2" /> 智能问答助手
-          </DialogTitle>
-          <DialogDescription className="text-slate-400">
-            基于当前爬取的网页内容进行提问。助手将根据提供的信息给出回答。
-          </DialogDescription>
-        </DialogHeader>
+    <Dialog open={isQaPanelOpen} onOpenChange={handleDialogClose}>
+      <DialogContent className="max-w-4xl bg-slate-900/95 border-cyan-700/50 text-slate-50 shadow-2xl backdrop-blur-md max-h-[85vh] min-h-[60vh] flex flex-row p-0">
+        {/* Left Panel: Main Chat Area */}
+        <div className="flex flex-col w-2/3 p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-xl flex items-center text-cyan-400">
+              <Bot className="w-6 h-6 mr-2" /> 智能问答助手
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {analysisMode === "crawl"
+                ? `基于 ${crawlReportGroups.length} 个网站的追踪爬取结果 (共 ${sourceCount} 个页面) 进行提问。`
+                : `基于已爬取的 ${sourceCount} 个网页内容进行提问。`}
+            </DialogDescription>
+          </DialogHeader>
 
-        {/* Main content area with scroll */} 
-        <div className="space-y-4 overflow-y-auto flex-grow pr-3 mr-[-6px] scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-800/50">
-          <div>
-            <label htmlFor="markdown-display" className="block text-xs font-medium text-cyan-300 mb-1.5">已载入的网页Markdown内容 (只读)</label>
-            <Textarea 
-              id="markdown-display"
-              value={rawMarkdown || "未加载任何内容。"} 
-              readOnly 
-              className="min-h-[100px] max-h-[180px] overflow-y-auto text-xs bg-slate-800/70 border-slate-700 p-2.5 rounded-md focus-visible:ring-cyan-500 focus-visible:ring-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700/50"
-            />
-          </div>
-
-          {/* Conversation Area */} 
-          <div className="space-y-3">
+          {/* Conversation Area */}
+          <div className="space-y-4 overflow-y-auto flex-grow pr-3 mr-[-6px] scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-800/50">
             {conversation.map((msg, index) => (
-              <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed break-words shadow ${msg.role === 'user' ? 'bg-cyan-600 text-white' : 'bg-slate-700/80 text-slate-100'}`}>
+              <div
+                key={index}
+                className={`flex ${
+                  msg.role === "user" ? "justify-end" : "justify-start"
+                }`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed break-words shadow whitespace-pre-line ${
+                    msg.role === "user"
+                      ? "bg-cyan-600 text-white"
+                      : "bg-slate-700/80 text-slate-100"
+                  }`}
+                >
                   {msg.content}
                 </div>
               </div>
             ))}
             <div ref={conversationEndRef} />
+            {error && !loading && (
+              <Alert
+                variant="destructive"
+                className="bg-red-900/40 border-red-700/60 text-red-300"
+              >
+                <AlertCircle className="h-4 w-4 text-red-400" />
+                <AlertTitle className="text-red-300">请求错误</AlertTitle>
+                <AlertDescription className="text-red-400/90">
+                  {error}
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
 
-          {error && !loading && (
-            <Alert variant="destructive" className="bg-red-900/40 border-red-700/60 text-red-300">
-              <AlertCircle className="h-4 w-4 text-red-400" />
-              <AlertTitle className="text-red-300">请求错误</AlertTitle>
-              <AlertDescription className="text-red-400/90">
-                {error}
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
-
-        {/* Input Area */} 
-        <div className="shrink-0 pt-3 mt-auto border-t border-slate-700/50">
-          <div className="flex gap-2 items-center">
-            <Input
-              ref={inputRef}
-              value={question}
-              onChange={e => setQuestion(e.target.value)}
-              placeholder={loading ? "AI正在思考..." : "对以上Markdown内容提问..."}
-              className="flex-1 bg-slate-800/70 border-slate-700 focus-visible:ring-cyan-500 focus-visible:ring-1 placeholder:text-slate-500 text-slate-100"
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !loading) { e.preventDefault(); handleAsk() } }}
-              disabled={loading}
-            />
-            <Button onClick={handleAsk} disabled={loading || !question.trim()} className="bg-cyan-600 hover:bg-cyan-500 text-slate-50 disabled:opacity-70">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "发送"}
-            </Button>
+          {/* Input Area */}
+          <div className="shrink-0 pt-4 mt-auto border-t border-slate-700/50">
+            <div className="flex gap-2 items-center">
+              <Input
+                ref={inputRef}
+                value={question}
+                onChange={e => setQuestion(e.target.value)}
+                placeholder={
+                  loading ? "AI正在思考..." : "对已载入的内容进行提问..."
+                }
+                className="flex-1 bg-slate-800/70 border-slate-700 focus-visible:ring-cyan-500 focus-visible:ring-1 placeholder:text-slate-500 text-slate-100"
+                onKeyDown={e => {
+                  if (e.key === "Enter" && !e.shiftKey && !loading) {
+                    e.preventDefault()
+                    handleAsk()
+                  }
+                }}
+                disabled={loading || !combinedMarkdown}
+              />
+              <Button
+                onClick={handleAsk}
+                disabled={loading || !question.trim() || !combinedMarkdown}
+                className="bg-cyan-600 hover:bg-cyan-500 text-slate-50 disabled:opacity-70"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "发送"}
+              </Button>
+            </div>
           </div>
         </div>
 
-        <DialogFooter className="mt-3 shrink-0">
-          <p className="text-xs text-slate-500 text-center w-full">
-            AI生成的内容仅供参考。关闭对话框将清空当前问答记录。
-          </p>
-        </DialogFooter>
+        {/* Right Panel: Context and Sources */}
+        <div className="w-1/3 bg-black/20 border-l border-cyan-800/30 p-6 flex flex-col">
+          <h3 className="text-lg font-semibold text-cyan-300 mb-4">情报源</h3>
+          <div className="text-xs space-y-2 rounded-md bg-slate-800/70 border border-slate-700 p-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700/50">
+            {analysisMode === "crawl" ? (
+              crawlReportGroups.map((group, groupIndex) => (
+                <div key={`group-${groupIndex}`}>
+                  <p className="font-bold text-cyan-400 truncate">
+                    {group.startingUrl}
+                  </p>
+                  <ul className="pl-2 mt-1 space-y-1">
+                    {group.reports.map((report, reportIndex) => (
+                      <li
+                        key={`report-${reportIndex}`}
+                        className="text-slate-400 truncate hover:text-cyan-300 transition-colors"
+                        title={report.url || ""}
+                      >
+                        - {report.title || report.url}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))
+            ) : (
+              <ul>
+                {reports.map((report, index) => (
+                  <li
+                    key={index}
+                    className="text-slate-400 truncate hover:text-cyan-300 transition-colors"
+                    title={report.url || ""}
+                  >
+                    - {report.title || report.url}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <DialogFooter className="mt-auto pt-4">
+            <p className="text-xs text-slate-500 text-center w-full">
+              AI生成的内容仅供参考。
+            </p>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   )

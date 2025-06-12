@@ -151,3 +151,38 @@ body {
 .prose strong {
   @apply text-cyan-300;
 }
+
+.prose hr {
+  @apply border-slate-700 my-6;
+}
+
+/* Citation Styling */
+.source-citation {
+  @apply inline-block align-middle cursor-pointer;
+  @apply px-2 py-0.5 mx-1;
+  @apply bg-cyan-900/70 text-cyan-300 border border-cyan-700/80;
+  @apply rounded-md text-xs font-mono font-semibold;
+  @apply no-underline transition-all duration-200;
+  line-height: 1.2;
+}
+
+.source-citation:hover {
+  @apply bg-cyan-700/80 text-white border-cyan-600;
+  @apply shadow-md shadow-cyan-900/50;
+  transform: translateY(-1px);
+}
+
+/* Reference list highlight effect */
+.prose li.highlight {
+  @apply bg-cyan-500/20 rounded-md transition-all duration-300;
+  animation: highlight-fade 1.5s ease-in-out;
+}
+
+@keyframes highlight-fade {
+  0% {
+    @apply bg-cyan-500/30;
+  }
+  100% {
+    @apply bg-transparent;
+  }
+}
