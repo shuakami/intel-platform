@@ -40,6 +40,9 @@ const planPrompt = `你是一位专业的AI研究与计划师。你的任务是�
 
 const qaPromptTemplate = `请根据以下Markdown内容，用中文回答用户的请求。
 
+**Current Date (UTC):**
+{current_date}
+
 <markdown>
 {markdownContent}
 </markdown>
@@ -49,6 +52,9 @@ const qaPromptTemplate = `请根据以下Markdown内容，用中文回答用户�
 const synthesizePromptTemplate = `你是一位专业的情报分析师。你收到了从多个网页上抓取的大量原始、非结构化文本，以及用户的原始请求。
 你的任务是将所有这些信息综合成一份高质量、专业、结构清晰的Markdown报告，该报告需直接回应用户的请求。
 请务必使用中文撰写报告。
+
+**Current Date (UTC):**
+{current_date}
 
 **用户的原始请求:**
 "{user_query}"
@@ -94,6 +100,7 @@ async function callLLM(
     markdownContent?: string
   }
 ) {
+  const currentDate = new Date().toUTCString()
 
   const MAX_CONTEXT_TOKENS = 40000
   const PROMPT_BUFFER_TOKENS = 4096 
@@ -133,10 +140,9 @@ async function callLLM(
       messages = [
         {
           role: "system",
-          content: planPrompt.replace(
-            "{user_query}",
-            payload.userPrompt || ""
-          ),
+          content: planPrompt
+            .replace("{user_query}", payload.userPrompt || "")
+            .replace("{current_date}", currentDate),
         },
       ];
       responseFormat = { type: "json_object" };
@@ -151,7 +157,8 @@ async function callLLM(
           role: "user",
           content: synthesizePromptTemplate
             .replace("{user_query}", payload.userPrompt || "")
-            .replace("{markdownContent}", processedMarkdown || ""),
+            .replace("{markdownContent}", processedMarkdown || "")
+            .replace("{current_date}", currentDate),
         },
       ];
       break;
@@ -166,7 +173,8 @@ async function callLLM(
           role: "user",
           content: qaPromptTemplate
             .replace("{markdownContent}", processedMarkdown || "")
-            .replace("{userPrompt}", payload.userPrompt || ""),
+            .replace("{userPrompt}", payload.userPrompt || "")
+            .replace("{current_date}", currentDate),
         },
       ];
       break;
