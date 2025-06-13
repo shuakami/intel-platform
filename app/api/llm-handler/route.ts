@@ -127,9 +127,13 @@ async function callLLM(
   const apiUrl = process.env.LLM_API;
   const model = process.env.LLM_API_MODEL;
 
-  if (!apiKey || !apiUrl || !model) {
-    console.error('LLM environment variables not set:', { apiKey: !!apiKey, apiUrl: !!apiUrl, model: !!model });
-    throw new Error('LLM API Key, URL, or Model is not configured in environment variables.');
+  if (!apiUrl || !model) {
+    console.error('LLM environment variables not set:', { apiUrl: !!apiUrl, model: !!model });
+    throw new Error('LLM API URL, or Model is not configured in environment variables.');
+  }
+
+  if (!apiKey) {
+    console.warn('[LLM Handler] LLM_API_KEY is not set. Proceeding without authentication. This is expected for local models like Ollama.');
   }
 
   let messages: { role: "system" | "user"; content: string }[] = [];
@@ -188,12 +192,17 @@ async function callLLM(
   };
 
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
     const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify(requestBody)
     });
 

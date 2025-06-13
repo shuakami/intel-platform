@@ -44,6 +44,7 @@ interface IntelState {
   ) => void
   setQaPanelOpen: (isOpen: boolean) => void
   resetData: () => void
+  removeReport: (url: string) => void
 }
 
 export const useIntelStore = create<IntelState>((set) => ({
@@ -84,6 +85,12 @@ export const useIntelStore = create<IntelState>((set) => ({
         autoQuery: options?.query || null,
       })
     }
+  },
+
+  removeReport: (url) => {
+    set((state) => ({
+      reports: state.reports.filter((report) => report.url !== url),
+    }))
   },
 
   setFinalReport: (

@@ -246,7 +246,11 @@ export default function IntelligenceQA() {
 
         {/* Right Panel: Context and Sources */}
         <div className="w-1/3 bg-black/20 border-l border-cyan-800/30 p-6 flex flex-col">
-          <h3 className="text-lg font-semibold text-cyan-300 mb-4">情报源</h3>
+          <h3 className="text-lg font-semibold text-cyan-300 mb-4">
+            {analysisMode === "scrape" && reports.length > 0 && reports[0].title?.startsWith("知识库文件:")
+              ? "知识库来源"
+              : "情报源"}
+          </h3>
           <div className="text-xs space-y-2 rounded-md bg-slate-800/70 border border-slate-700 p-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700/50">
             {analysisMode === "crawl" ? (
               crawlReportGroups.map((group, groupIndex) => (

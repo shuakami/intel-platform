@@ -186,3 +186,17 @@ body {
     @apply bg-transparent;
   }
 }
+
+/* Scoped container for externally scraped content to prevent style bleed */
+.scraped-content-container {
+  all: initial;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  color: #e2e8f0; /* slate-200 */
+  font-size: 16px;
+  line-height: 1.5;
+  display: block;
+}
+
+.scraped-content-container * {
+  all: revert;
+}

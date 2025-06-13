@@ -148,9 +148,9 @@ async function checkBatchScrapeStatus(jobId: string): Promise<BatchScrapeRespons
   if (result.data && Array.isArray(result.data)) {
     result.data = result.data.map((item: any, index: number) => ({
       success: item.metadata.statusCode === 200,
-      data: {
+    data: {
         markdown: item.markdown,
-        metadata: {
+      metadata: {
           title: item.metadata?.title || "Untitled",
           description: item.metadata?.description,
           language: item.metadata?.language,
@@ -190,7 +190,7 @@ async function analyzeSingleIntelligence(url: string): Promise<any> {
   let scrapeResult: ScrapeResponse
 
   try {
-    scrapeResult = await makeApiRequest(url)
+      scrapeResult = await makeApiRequest(url)
   } catch (error) {
     console.error("API request failed:", error)
     throw error
@@ -391,6 +391,24 @@ ${wordCount > 300 ? "内容质量较高，适合作为情报来源。" : "内容
   `
 
   return { feedback, collection, report }
+}
+
+// Function to sanitize scraped HTML content
+export function sanitizeHtmlContent(htmlString: string | null): string {
+  if (typeof window === "undefined" || !htmlString) {
+    return ""
+  }
+
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(htmlString, "text/html")
+
+  // Remove potentially harmful or layout-breaking elements
+  doc
+    .querySelectorAll('script, style, link[rel="stylesheet"]')
+    .forEach((el) => el.remove())
+
+  // Return the sanitized HTML from the body tag
+  return doc.body.innerHTML
 }
 
 // Function to process intelligence queries

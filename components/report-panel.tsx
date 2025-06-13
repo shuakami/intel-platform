@@ -3,6 +3,7 @@
 import { marked } from "marked"
 import StatusIndicator from "./status-indicator"
 import { useIntelStore, Report } from "@/lib/store"
+import { sanitizeHtmlContent } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import {
   Download,
@@ -12,6 +13,7 @@ import {
   Wand2,
   ChevronDown,
   ChevronRight,
+  X,
 } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 
@@ -168,7 +170,7 @@ function ReportBlock({
   index: number
   isGrouped?: boolean
 }) {
-  const { analysisStatus, setQaPanelOpen } = useIntelStore()
+  const { analysisStatus, setQaPanelOpen, removeReport } = useIntelStore()
   const [showAnalysis, setShowAnalysis] = useState(false)
 
   const downloadMarkdown = (markdown: string | null, title: string | null) => {
@@ -184,6 +186,8 @@ function ReportBlock({
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
+
+  const isKnowledgeBaseFile = report.title?.startsWith("知识库文件:")
 
   return (
     <div
@@ -247,6 +251,18 @@ function ReportBlock({
               </Button>
             </>
           )}
+          {isKnowledgeBaseFile && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="intel-button text-xs text-red-400 hover:bg-red-900/50 hover:text-red-300"
+              onClick={() => removeReport(report.url!)}
+              title="删除此文件"
+            >
+              <X className="w-3 h-3 mr-1" />
+              删除
+            </Button>
+          )}
           <div className="flex items-center gap-2 text-xs text-cyan-400 font-mono">
             <span>CLASSIFIED</span>
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
@@ -254,31 +270,20 @@ function ReportBlock({
         </div>
       </div>
 
-      <section className="intel-section border rounded-md p-4 print:border-none">
-        <h3 className="font-semibold text-lg border-b border-cyan-800/30 mb-2 leading-10 print:hidden text-cyan-300">
-          4. {showAnalysis ? "分析报告" : "网页原始内容"}
-        </h3>
-        <div className="text-sm">
-          {report.error ? (
-            <div className="text-red-400 p-4 bg-red-900/20 rounded">
-              <p className="font-bold">分析错误:</p>
-              <p>{report.error}</p>
-            </div>
-          ) : showAnalysis && report.reportData ? (
-            <div className="prose prose-invert max-w-none">
-              <div dangerouslySetInnerHTML={{ __html: report.reportData }} />
-            </div>
-          ) : report.htmlContent ? (
-            <div className="prose prose-invert max-w-none">
-              <div
-                className="bg-black/10 p-4 rounded border border-cyan-800/30 max-h-96 overflow-y-auto"
-                dangerouslySetInnerHTML={{ __html: report.htmlContent }}
-              />
-            </div>
-          ) : (
-            <div className="text-gray-400">无可用预览</div>
-          )}
-        </div>
+      <section className="intel-section border border-cyan-800/30 rounded-md p-4 bg-black/20 mt-4">
+        {showAnalysis ? (
+          <div
+            className="prose prose-invert max-w-none break-words prose-p:leading-relaxed prose-headings:text-cyan-300 prose-a:text-cyan-400 hover:prose-a:text-cyan-300 prose-strong:text-white prose-blockquote:border-cyan-700 prose-blockquote:pl-4 prose-blockquote:italic"
+            dangerouslySetInnerHTML={{ __html: report.reportData || "" }}
+          />
+        ) : (
+          <div
+            className="scraped-content-container"
+            dangerouslySetInnerHTML={{
+              __html: sanitizeHtmlContent(report.htmlContent),
+            }}
+          />
+        )}
       </section>
     </div>
   )

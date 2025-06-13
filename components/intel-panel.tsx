@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
-import { SquarePlus, Globe, Key, MessageSquareQuote, Loader2, Wand2 } from "lucide-react"
+import { SquarePlus, Globe, Key, MessageSquareQuote, Loader2, Wand2, FolderUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
@@ -12,8 +12,9 @@ import { Label } from "@/components/ui/label"
 import StatusIndicator from "./status-indicator"
 import { analyzeIntelligence } from "@/lib/api"
 import { useIntelStore, CrawlResultGroup, Report } from "@/lib/store"
+import { marked } from "marked"
 
-type PanelMode = "manual" | "auto"
+type PanelMode = "manual" | "auto" | "kb"
 
 // Helper function for client-side crawling logic
 async function executeClientSideCrawl(
@@ -107,9 +108,6 @@ export default function IntelPanel() {
     setFinalReport,
     resetData,
   } = useIntelStore()
-
-  // Get API key from environment if available
-  const envApiKey = process.env.NEXT_PUBLIC_API_KEY || ""
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -270,6 +268,62 @@ export default function IntelPanel() {
 
   const isCrawlDisabled = isLoading
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) {
+      return
+    }
+
+    setIsLoading(true)
+    setAnalysisStatus("processing")
+
+    try {
+      const newReports: Report[] = await Promise.all(
+        Array.from(files).map(async (file, index) => {
+          const content = await file.text()
+          const htmlContent = await marked.parse(content)
+          const reportData = await marked.parse(
+            `## 文件内容分析\n\n- **文件名:** ${file.name}\n- **类型:** ${
+              file.type || "未知"
+            }\n- **大小:** ${(
+              file.size / 1024
+            ).toFixed(2)} KB\n\n文件已成功加载并准备好进行问答。`
+          )
+
+          return {
+            url: file.name,
+            title: `知识库文件: ${file.name}`,
+            description: `文件大小: ${(file.size / 1024).toFixed(2)} KB`,
+            language: "zh-CN",
+            rawMarkdown: content,
+            htmlContent,
+            feedbackData: "",
+            collectionData: "",
+            reportData,
+          }
+        })
+      )
+
+      setReportData(
+        [...useIntelStore.getState().reports, ...newReports],
+        "scrape"
+      )
+      setQaPanelOpen(true)
+    } catch (err) {
+      alert("读取文件时发生错误。")
+      console.error(err)
+    } finally {
+      setIsLoading(false)
+      setAnalysisStatus("active")
+    }
+
+    // Reset file input so user can upload the same file again
+    e.target.value = ""
+  }
+
+  // Get API key from environment if available
+  const envApiKey = process.env.NEXT_PUBLIC_API_KEY || ""
+
   return (
     <div className="intel-panel rounded-lg p-6">
       <div className="flex items-center gap-3 mb-6">
@@ -296,7 +350,7 @@ export default function IntelPanel() {
         <div className="p-1 flex bg-cyan-950/40 rounded-lg border border-cyan-800/40 w-full max-w-sm mb-8">
           <Button
             variant="ghost"
-            className={`w-1/2 rounded-md py-2 text-sm font-semibold transition-colors h-auto flex items-center justify-center gap-2 ${
+            className={`w-1/3 rounded-md py-2 text-sm font-semibold transition-colors h-auto flex items-center justify-center gap-2 ${
               panelMode === "manual"
                 ? "bg-cyan-600 text-white shadow"
                 : "text-cyan-300 hover:bg-cyan-800/50 hover:text-white"
@@ -308,7 +362,7 @@ export default function IntelPanel() {
           </Button>
           <Button
             variant="ghost"
-            className={`w-1/2 rounded-md py-2 text-sm font-semibold transition-colors h-auto ${
+            className={`w-1/3 rounded-md py-2 text-sm font-semibold transition-colors h-auto flex items-center justify-center gap-2 ${
               panelMode === "auto"
                 ? "bg-cyan-600 text-white shadow"
                 : "text-cyan-300 hover:bg-cyan-800/50 hover:text-white"
@@ -317,6 +371,18 @@ export default function IntelPanel() {
           >
             <Wand2 className="w-4 h-4" />
             AI 自动分析
+          </Button>
+          <Button
+            variant="ghost"
+            className={`w-1/3 rounded-md py-2 text-sm font-semibold transition-colors h-auto flex items-center justify-center gap-2 ${
+              panelMode === "kb"
+                ? "bg-cyan-600 text-white shadow"
+                : "text-cyan-300 hover:bg-cyan-800/50 hover:text-white"
+            }`}
+            onClick={() => setPanelMode("kb")}
+          >
+            <FolderUp className="w-4 h-4" />
+            知识库分析
           </Button>
         </div>
 
@@ -347,8 +413,6 @@ export default function IntelPanel() {
             </div>
           </div>
         )}
-
-
 
         {isLoading && crawlMode && (
           <div className="my-4 p-4 bg-cyan-900/30 border border-cyan-700/50 rounded-lg text-center">
@@ -442,7 +506,7 @@ export default function IntelPanel() {
               </span>
             </Button>
           </form>
-        ) : (
+        ) : panelMode === "auto" ? (
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <label
@@ -477,6 +541,52 @@ export default function IntelPanel() {
               </span>
             </Button>
           </form>
+        ) : (
+          <div className="space-y-6">
+            <div className="space-y-2">
+               <label
+                className="peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2 mb-3 text-sm font-semibold text-cyan-300 font-mono uppercase tracking-wide"
+                htmlFor="kb-upload"
+              >
+                <FolderUp className="w-4 h-4" />
+                上传本地文件
+              </label>
+              <div className="relative flex items-center justify-center w-full">
+                <label
+                  htmlFor="kb-upload-input"
+                  className="flex flex-col items-center justify-center w-full h-48 border-2 border-cyan-800/50 border-dashed rounded-lg cursor-pointer bg-black/20 hover:bg-black/40 transition-colors"
+                >
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <FolderUp className="w-10 h-10 mb-3 text-cyan-400/80" />
+                    <p className="mb-2 text-sm text-cyan-300/90">
+                      <span className="font-semibold">点击上传</span> 或拖拽文件到此区域
+                    </p>
+                    <p className="text-xs text-cyan-400/70">
+                      支持 Markdown, TXT, JSON, CSV 等文本文件
+                    </p>
+                  </div>
+                   <input
+                    id="kb-upload-input"
+                    type="file"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    accept=".md,.txt,.json,.csv,.js,.ts,.py,.html,.css"
+                    disabled={isLoading}
+                    multiple
+                  />
+                </label>
+              </div>
+               <div className="text-xs text-cyan-400/70 mt-1">
+                文件内容将在本地处理，不会上传到服务器，可放心使用。
+              </div>
+            </div>
+            {isLoading && (
+               <div className="flex items-center justify-center text-cyan-300">
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  正在读取并分析文件...
+               </div>
+            )}
+          </div>
         )}
       </section>
     </div>
