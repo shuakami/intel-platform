@@ -16,13 +16,30 @@ import { marked } from "marked"
 
 type PanelMode = "manual" | "auto" | "kb"
 
+function getRegistrableDomain(hostname: string): string {
+  const parts = hostname.split(".")
+  // A simple heuristic to get the main domain, e.g., "ifeng.com" from "www.ifeng.com"
+  // This may not work for complex TLDs like ".co.uk" but covers the user's case.
+  if (parts.length > 2) {
+    // Check for common TLDs that have two parts, like "com.cn", "org.cn"
+    const secondLevelTlds = ["com", "net", "org", "gov"]
+    if (secondLevelTlds.includes(parts[parts.length - 2]) && parts[parts.length - 1].length === 2) {
+      return parts.slice(-3).join(".")
+    }
+    return parts.slice(-2).join(".")
+  }
+  return hostname
+}
+
 // Helper function for client-side crawling logic
 async function executeClientSideCrawl(
   urls: string[],
   limitPerSite: number
 ): Promise<CrawlResultGroup[]> {
+  console.log("[CRAWL] Starting client-side crawl. Initial URLs:", urls, "Limit per site:", limitPerSite)
   // 阶段1：初始页面抓取
   const initialReports = (await analyzeIntelligence(urls)) as Report[]
+  console.log("[CRAWL] Phase 1: Initial scrape completed. Reports count:", initialReports.length)
 
   // 阶段2：从每个初始报告中提取链接，并应用限制
   const finalLinksToScrape = new Set<string>()
@@ -30,9 +47,16 @@ async function executeClientSideCrawl(
 
   initialReports.forEach((report) => {
     const reportUrl = report.url
-    if (!reportUrl || !report.htmlContent) return
+    if (!reportUrl || !report.htmlContent) {
+      console.log(`[CRAWL] Skipping report for ${reportUrl} due to missing URL or content.`)
+      return
+    }
+    console.log(`[CRAWL] Phase 2: Processing report for ${reportUrl}`)
 
     const base = new URL(reportUrl)
+    const baseDomain = getRegistrableDomain(base.hostname)
+    console.log(`[CRAWL] Base domain for ${base.hostname} determined as: ${baseDomain}`)
+
     const linksForThisSite = new Set<string>()
 
     const parser = new DOMParser()
@@ -41,19 +65,28 @@ async function executeClientSideCrawl(
     doc.querySelectorAll("a").forEach((anchor) => {
       const href = anchor.getAttribute("href")
       if (!href) return
+
       try {
         const absoluteUrl = new URL(href, base.href)
-        if (absoluteUrl.hostname === base.hostname) {
-          const cleanUrl = absoluteUrl.href.split("#")[0]
+        const linkDomain = getRegistrableDomain(absoluteUrl.hostname)
+        const cleanUrl = absoluteUrl.href.split("#")[0]
+
+        if (linkDomain === baseDomain) {
           if (cleanUrl !== reportUrl) {
+            console.log(`[CRAWL] Found valid link: ${cleanUrl} (domain: ${linkDomain})`)
             linksForThisSite.add(cleanUrl)
+          } else {
+            console.log(`[CRAWL] Discarding link (same as report URL): ${cleanUrl}`)
           }
+        } else {
+          console.log(`[CRAWL] Discarding link (domain mismatch): ${cleanUrl} (base: ${baseDomain}, link: ${linkDomain})`)
         }
       } catch (e) {
-        /* ignore invalid URLs */
+        console.warn(`[CRAWL] Ignoring invalid URL found: ${href}`, e)
       }
     })
 
+    console.log(`[CRAWL] Found ${linksForThisSite.size} valid unique links on ${reportUrl}. Applying limit of ${limitPerSite}.`)
     const limitedLinks = Array.from(linksForThisSite).slice(0, limitPerSite)
     limitedLinks.forEach((link) => {
       finalLinksToScrape.add(link)
@@ -63,6 +96,8 @@ async function executeClientSideCrawl(
 
   // 阶段3：二次抓取
   const linksArray = Array.from(finalLinksToScrape)
+  console.log("[CRAWL] Phase 3: Starting secondary scrape for all found links. Total links:", linksArray.length)
+  console.log("[CRAWL] Links to be scraped:", linksArray)
   const secondaryReports =
     linksArray.length > 0
       ? ((await analyzeIntelligence(linksArray)) as Report[])
