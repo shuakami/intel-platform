@@ -2,7 +2,7 @@
 
 import { marked } from "marked"
 import StatusIndicator from "./status-indicator"
-import { useIntelStore, Report } from "@/lib/store"
+import { useIntelStore, Report, CrawlResultGroup } from "@/lib/store"
 import { sanitizeHtmlContent } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,90 +14,263 @@ import {
   ChevronDown,
   ChevronRight,
   X,
+  FileSignature,
+  FileCode,
 } from "lucide-react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  ExternalHyperlink,
+  IStylesOptions,
+  IRunOptions,
+} from "docx"
+import { saveAs } from "file-saver"
+
+const robustHtmlToDocx = (htmlString: string): Paragraph[] => {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(htmlString, "text/html")
+  const paragraphs: Paragraph[] = []
+
+  const processRuns = (
+    node: ChildNode,
+    style: IRunOptions = {}
+  ): (TextRun | ExternalHyperlink)[] => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return [new TextRun({ text: (node as Text).textContent || "", ...style })]
+    }
+
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement
+      let newStyle = { ...style }
+      if (el.nodeName === "STRONG" || el.nodeName === "B") newStyle.bold = true
+      if (el.nodeName === "EM" || el.nodeName === "I") newStyle.italics = true
+      if (el.nodeName === "A") newStyle.style = "Hyperlink"
+
+      const children = Array.from(el.childNodes).flatMap((child) =>
+        processRuns(child, newStyle)
+      )
+
+      if (el.nodeName === "A") {
+        return [
+          new ExternalHyperlink({
+            children: children.filter(
+              (r): r is TextRun => r instanceof TextRun
+            ),
+            link: (el as HTMLAnchorElement).href,
+          }),
+        ]
+      }
+      return children
+    }
+
+    return []
+  }
+
+  // Processes block-level elements from the parsed HTML body
+  const processBlockLevelElements = (node: ChildNode) => {
+    switch (node.nodeName) {
+      case "H1":
+      case "H2":
+      case "H3":
+      case "H4":
+      case "H5":
+      case "H6":
+        paragraphs.push(
+          new Paragraph({
+            style: `Heading${node.nodeName.charAt(1)}`,
+            children: processRuns(node),
+          })
+        )
+        break
+      case "P":
+        paragraphs.push(
+          new Paragraph({ style: "Normal", children: processRuns(node) })
+        )
+        break
+      case "UL":
+      case "OL":
+        ;(node as HTMLElement).querySelectorAll("li").forEach((li) => {
+          paragraphs.push(
+            new Paragraph({
+              style: "ListParagraph",
+              bullet: { level: 0 },
+              children: processRuns(li),
+            })
+          )
+        })
+        break
+      default:
+        // If it's not a recognized block element, but it is an element, process its children.
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          Array.from(node.childNodes).forEach(processBlockLevelElements)
+        }
+    }
+  }
+
+  Array.from(doc.body.childNodes).forEach(processBlockLevelElements)
+  return paragraphs
+}
 
 function FinalReportBlock({ reportContent }: { reportContent: string }) {
   const [showRaw, setShowRaw] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
+  const { reports, crawlReportGroups } = useIntelStore()
 
-  const cleanedContent = reportContent
-    .replace(/^`{3}markdown\s*\n/i, "")
-    .replace(/\n`{3}$/, "")
-    .trim()
+  const allReports = useMemo((): Report[] => {
+    const directReports = reports || []
+    const crawledReports =
+      crawlReportGroups?.flatMap((group) => group.reports) || []
+    // Simple way to combine and deduplicate if necessary, assuming URL is a unique key
+    const combined = [...directReports, ...crawledReports]
+    const uniqueReports = Array.from(new Map(combined.map(item => [item.url, item])).values());
+    return uniqueReports
+  }, [reports, crawlReportGroups])
 
-  // 1. Process citations before rendering
-  const processedHtml = ((): string => {
-    const renderer = new marked.Renderer()
-    const originalLinkRenderer = renderer.link.bind(renderer)
+  const { processedHtml, usedSources, cleanedContent } = useMemo(() => {
+    // 1. Remove markdown code fences
+    let content = reportContent
+      .replace(/^`{3}markdown\s*\n/i, "")
+      .replace(/\n`{3}$/, "")
+      .trim()
 
-    // Customize link rendering to style citations
-    renderer.link = (link) => {
-      const { href, text } = link
-      // If the link text is "Source N", style it as a citation badge
-      if (href && text.match(/^Source \d+$/)) {
-        const sourceId = text.match(/\d+/)?.[0]
-        if (sourceId) {
-          // The link should point to an anchor in the reference list
-          return `<a href="#ref-source-${sourceId}" class="source-citation" data-source-id="${sourceId}">[${text}]</a>`
+    // 2. Remove the LLM-generated reference list to avoid conflicts
+    // This regex handles "参考资料" or a "---" separator followed by source definitions
+    content = content.replace(/(\n\n参考资料.*|\n\n---\n\n\[source.+)/s, "")
+
+    const usedSources = new Map<string, string>()
+
+    // 3. Replace source citations with hyperlinks
+    const contentWithLinks = content.replace(
+      /\[source (\d+)\]/gi,
+      (match, sourceIdStr) => {
+        const sourceId = parseInt(sourceIdStr, 10)
+        if (sourceId > 0 && sourceId <= allReports.length) {
+          const report = allReports[sourceId - 1]
+          if (report && report.url) {
+            usedSources.set(sourceIdStr, report.url)
+            // Use the correct class name "source-citation"
+            return `<a href="${report.url}" target="_blank" rel="noopener noreferrer" class="source-citation">[source ${sourceId}]</a>`
+          }
         }
+        return match // Return original match if source not found
       }
+    )
 
-      // For all other links, render them as normal external links that open in a new tab
-      const originalLink = originalLinkRenderer(link) || ""
-      return originalLink.replace(
-        /^<a/,
-        '<a target="_blank" rel="noopener noreferrer"'
-      )
-    }
-
-    let html = marked.parse(cleanedContent, {
-      renderer,
+    // 4. Parse the processed markdown to HTML
+    let html = marked.parse(contentWithLinks, {
       breaks: true,
+      gfm: true,
     }) as string
 
-    // Add IDs to the reference list items for anchoring
-    html = html.replace(/(<li>\s*\[Source (\d+)\]:)/g, (match, p1, p2) => {
-      return `<li id="ref-source-${p2}">` + p1.substring(4)
-    })
-
-    return html
-  })()
-
-  // 2. Add smooth scrolling via event delegation
-  useEffect(() => {
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement
-      if (target.classList.contains("source-citation")) {
-        event.preventDefault()
-        const sourceId = target.getAttribute("data-source-id")
-        const refElement = contentRef.current?.querySelector(
-          `#ref-source-${sourceId}`
-        )
-        if (refElement) {
-          refElement.scrollIntoView({ behavior: "smooth", block: "center" })
-          // Optional: highlight the reference
-          refElement.classList.add("highlight")
-          setTimeout(() => refElement.classList.remove("highlight"), 1500)
-        }
-      }
-    }
-
-    const contentEl = contentRef.current
-    contentEl?.addEventListener("click", handleClick)
-    return () => contentEl?.removeEventListener("click", handleClick)
-  }, [processedHtml]) // Re-attach if content changes
+    return { processedHtml: html, usedSources, cleanedContent: content }
+  }, [reportContent, allReports])
 
   const downloadMarkdown = (content: string) => {
-    const blob = new Blob([content], { type: "text/markdown" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `ai-synthesized-report.md`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" })
+    saveAs(blob, "ai-synthesized-report.md")
+  }
+
+  const downloadDocx = async (htmlContent: string, sources: Map<string, string>) => {
+    const docChildren = robustHtmlToDocx(htmlContent);
+
+    if (sources.size > 0) {
+        docChildren.push(new Paragraph({ text: "\n", spacing: { after: 400 } }));
+        docChildren.push(new Paragraph({ text: "来源网站汇总", style: "Heading2" }));
+        sources.forEach((url, id) => {
+            docChildren.push(new Paragraph({
+                style: "Normal",
+                children: [
+                    new TextRun(`source ${id}: `),
+                    new ExternalHyperlink({
+                        children: [
+                            new TextRun({
+                                text: url,
+                                style: "Hyperlink",
+                            }),
+                        ],
+                        link: url,
+                    }),
+                ],
+            }));
+        });
+    }
+
+    const docStyles: IStylesOptions = {
+        paragraphStyles: [
+            {
+                id: "Normal",
+                name: "Normal",
+                basedOn: "Normal",
+                next: "Normal",
+                quickFormat: true,
+                run: { font: "Calibri", size: 22 }, // 11pt
+                paragraph: { spacing: { after: 120 } }, // 6pt
+            },
+            {
+                id: "Heading1",
+                name: "Heading 1",
+                basedOn: "Normal",
+                next: "Normal",
+                quickFormat: true,
+                run: { font: "Calibri", size: 32, bold: true, color: "2E74B5" }, // 16pt, dark blue
+                paragraph: { spacing: { before: 240, after: 120 } },
+            },
+            {
+                id: "Heading2",
+                name: "Heading 2",
+                basedOn: "Normal",
+                next: "Normal",
+                quickFormat: true,
+                run: { font: "Calibri", size: 26, bold: true, color: "2E74B5" }, // 13pt
+                paragraph: { spacing: { before: 240, after: 120 } },
+            },
+            {
+                id: "Heading3",
+                name: "Heading 3",
+                basedOn: "Normal",
+                next: "Normal",
+                quickFormat: true,
+                run: { font: "Calibri", size: 24, bold: true, color: "5B9BD5" }, // 12pt, light blue
+                paragraph: { spacing: { before: 120, after: 80 } },
+            },
+             {
+                id: "ListParagraph",
+                name: "List Paragraph",
+                basedOn: "Normal",
+                quickFormat: true,
+                paragraph: {
+                    indent: { left: 720 },
+                    spacing: { after: 80 }
+                },
+            },
+        ],
+        characterStyles: [
+            {
+                id: 'Hyperlink',
+                name: 'Hyperlink',
+                basedOn: 'DefaultParagraphFont',
+                run: {
+                    color: '0000FF',
+                    underline: {
+                        type: 'single',
+                        color: '0000FF',
+                    },
+                },
+            },
+        ],
+    };
+
+    const doc = new Document({
+      sections: [{ children: docChildren }],
+      styles: docStyles,
+    })
+
+    const blob = await Packer.toBlob(doc)
+    saveAs(blob, "ai-synthesized-report.docx")
   }
 
   return (
@@ -133,13 +306,22 @@ function FinalReportBlock({ reportContent }: { reportContent: string }) {
             )}
           </Button>
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="intel-button text-xs"
+            className="intel-button text-xs border-cyan-600 hover:bg-cyan-700/50"
             onClick={() => downloadMarkdown(cleanedContent)}
           >
-            <Download className="w-3 h-3 mr-1" />
-            下载报告
+            <FileCode className="w-3 h-3 mr-1" />
+            下载MD
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="intel-button text-xs border-cyan-600 hover:bg-cyan-700/50"
+            onClick={() => downloadDocx(processedHtml, usedSources)}
+          >
+            <FileSignature className="w-3 h-3 mr-1" />
+            下载Word
           </Button>
         </div>
       </div>
@@ -157,6 +339,28 @@ function FinalReportBlock({ reportContent }: { reportContent: string }) {
           )}
         </div>
       </section>
+
+      {usedSources.size > 0 && !showRaw && (
+        <section className="mt-6">
+          <h3 className="text-lg font-semibold text-cyan-300 mb-3">来源网站汇总</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            {Array.from(usedSources.entries()).map(([id, url]) => (
+              <div key={id} className="flex items-center gap-2">
+                <span className="text-slate-400 font-mono text-xs w-20">{`[source ${id}]`}</span>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-cyan-400 hover:text-cyan-300 truncate"
+                  title={url}
+                >
+                  {url}
+                </a>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -289,174 +493,143 @@ function ReportBlock({
   )
 }
 
+function CrawlGroupBlock({
+  group,
+  groupIndex,
+}: {
+  group: CrawlResultGroup
+  groupIndex: number
+}) {
+  const [isExpanded, setIsExpanded] = useState(true)
+
+  return (
+    <div className="intel-panel-item bg-slate-900/50 border border-slate-800 rounded-lg p-4">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center w-full text-left text-lg font-semibold text-cyan-200"
+      >
+        {isExpanded ? (
+          <ChevronDown className="w-5 h-5 mr-2" />
+        ) : (
+          <ChevronRight className="w-5 h-5 mr-2" />
+        )}
+        爬取组 #{groupIndex + 1}:{" "}
+        <span className="ml-2 text-cyan-400 truncate">{group.startingUrl}</span>
+      </button>
+      {isExpanded && (
+        <div className="mt-4 pl-7 space-y-4 border-l-2 border-dashed border-slate-700 ml-2">
+          {group.reports.map((report, index) => (
+            <ReportBlock
+              key={report.url || index}
+              report={report}
+              index={index}
+              isGrouped
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ReportPanel() {
   const {
     analysisStatus,
     reports,
-    analysisMode,
     crawlReportGroups,
     finalReport,
+    autoQuery,
   } = useIntelStore()
-  const [showRawData, setShowRawData] = useState(false)
 
   const downloadFullReport = () => {
-    let fullReportMd = `# 情报分析最终报告\n\n*生成于: ${new Date().toLocaleString()}*\n\n---\n\n`
+    // 1. Get the final AI report markdown
+    const finalReportMarkdown = finalReport
+      ? `# AI 综合分析报告\n\n**原始查询:** ${autoQuery}\n\n${finalReport}`
+      : ""
 
-    // 1. Add AI-synthesized report if available
-    if (finalReport) {
-      fullReportMd += "## AI 综合分析报告\n\n"
-      const cleanedContent = finalReport
-        .replace(/^`{3}markdown\s*\n/i, "")
-        .replace(/\n`{3}$/, "")
-        .trim()
-      fullReportMd += `${cleanedContent}\n\n---\n\n`
-    }
+    // 2. Get all individual source markdowns
+    const allReports = [...reports, ...crawlReportGroups.flatMap(g => g.reports)];
+    const sourcesMarkdown = allReports
+      .map(
+        (r, i) =>
+          `---\n\n## 来源 ${i + 1}: ${r.url || "N/A"}\n\n${
+            r.rawMarkdown || "无内容"
+          }`
+      )
+      .join("\n\n")
 
-    const hasCrawlData = crawlReportGroups.length > 0
-    const hasScrapeData = reports.length > 0
+    // 3. Combine them
+    const fullContent = `${finalReportMarkdown}\n\n# 原始数据来源\n\n${sourcesMarkdown}`
 
-    // 2. Add raw data section if any raw data exists
-    if (hasCrawlData || hasScrapeData) {
-      fullReportMd += `## 原始抓取数据\n\n`
-    }
-
-    if (hasCrawlData) {
-      crawlReportGroups.forEach((group) => {
-        fullReportMd += `### 追踪爬取报告: ${group.startingUrl}\n\n`
-        group.reports.forEach((report, index) => {
-          fullReportMd += `#### 页面 ${index + 1}: ${report.title || "无标题"}\n`
-          fullReportMd += `**URL:** ${report.url || "N/A"}\n\n`
-          if (report.error) {
-            fullReportMd += `**错误:** 分析失败。 ${report.error}\n\n`
-          } else {
-            fullReportMd += `**内容:**\n\n---\n\n${report.rawMarkdown || "无内容"}\n\n---\n\n`
-          }
-        })
-      })
-    } else if (hasScrapeData) {
-      fullReportMd += `### 网页抓取报告\n\n`
-      reports.forEach((report, index) => {
-        fullReportMd += `#### 页面 ${index + 1}: ${report.title || "无标题"}\n`
-        fullReportMd += `**URL:** ${report.url || "N/A"}\n\n`
-        if (report.error) {
-          fullReportMd += `**错误:** 分析失败。 ${report.error}\n\n`
-        } else {
-          fullReportMd += `**内容:**\n\n---\n\n${report.rawMarkdown || "无内容"}\n\n---\n\n`
-        }
-      })
-    }
-
-    const blob = new Blob([fullReportMd], { type: "text/markdown" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `intelligence-report-${Date.now()}.md`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    const blob = new Blob([fullContent], { type: "text/markdown;charset=utf-8" })
+    saveAs(blob, "full-intelligence-report.md")
   }
 
-  if (
-    analysisStatus !== "active" ||
-    (reports.length === 0 && crawlReportGroups.length === 0 && !finalReport)
-  ) {
+  if (analysisStatus === "idle") {
     return (
-      <div className="intel-panel rounded-lg p-6 mb-8">
-        <div className="flex items-center gap-3 mb-6">
-          <StatusIndicator status="standby" />
-          <h2 className="text-xl font-semibold text-cyan-300">
-            <span className="intel-text">爬取内容</span>
-          </h2>
-        </div>
-        <section className="intel-section border rounded-md p-4 print:border-none">
-          <h3 className="font-semibold text-lg border-b border-cyan-800/30 mb-2 leading-10 print:hidden text-cyan-300">
-            4. 网页原始内容
-          </h3>
-          <div className="text-sm">
-            <div className="text-gray-400">等待网页内容爬取...</div>
-          </div>
-        </section>
+      <div className="flex-center h-full text-slate-500">
+        <p>请在左侧面板输入网址或分析需求以开始。</p>
+      </div>
+    )
+  }
+
+  if (analysisStatus === "processing") {
+    return <StatusIndicator status="processing" />
+  }
+
+  if (analysisStatus === "error") {
+    return <StatusIndicator status="error" />
+  }
+
+  const hasData =
+    reports.length > 0 || crawlReportGroups.length > 0 || finalReport
+
+  if (analysisStatus === "active" && !hasData) {
+    return (
+      <div className="flex-center h-full text-slate-500">
+        <p>未能获取到任何数据。</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">分析结果</h1>
-        <Button onClick={downloadFullReport}>
-          <Download className="mr-2 h-4 w-4" />
-          下载最终报告
-        </Button>
-      </div>
+    <div className="p-4 space-y-6">
+      {finalReport && <FinalReportBlock reportContent={finalReport} />}
 
-      {analysisMode === "report" && finalReport && (
-        <FinalReportBlock reportContent={finalReport} />
-      )}
-
-      {(analysisMode === "report" &&
-        (crawlReportGroups.length > 0 || reports.length > 0)) && (
-        <div className="mt-8 border-t border-cyan-800/30 pt-8">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-white">原始抓取数据</h2>
-            <Button
-              variant="ghost"
-              className="intel-button text-cyan-300"
-              onClick={() => setShowRawData(!showRawData)}
-            >
-              {showRawData ? (
-                <ChevronDown className="w-4 h-4 mr-2" />
-              ) : (
-                <ChevronRight className="w-4 h-4 mr-2" />
-              )}
-              {showRawData ? "隐藏详情" : "查看详情"}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {analysisMode === "crawl" ||
-      (analysisMode === "report" &&
-        showRawData &&
-        crawlReportGroups.length > 0) ? (
-        <div className="flex flex-col gap-8">
-          {crawlReportGroups.map((group, groupIndex) => (
-            <div
-              key={groupIndex}
-              className="crawl-group-card rounded-lg p-6 bg-cyan-950/40 border border-cyan-800/30"
-            >
-              <div className="border-b border-cyan-800/50 pb-4 mb-6">
-                <h2 className="text-2xl font-bold text-cyan-200">
-                  追踪爬取报告:
-                  <span className="ml-2 font-mono text-cyan-300 break-all">
-                    {group.startingUrl}
-                  </span>
-                </h2>
-              </div>
-              <div className="flex flex-col gap-6">
-                {group.reports.map((report, reportIndex) => (
-                  <ReportBlock
-                    key={reportIndex}
-                    report={report}
-                    index={reportIndex}
-                    isGrouped={true}
-                  />
-                ))}
-              </div>
-            </div>
+      {crawlReportGroups.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold text-slate-300 px-2">原始爬取数据</h2>
+          {crawlReportGroups.map((group, index) => (
+            <CrawlGroupBlock
+              key={group.startingUrl}
+              group={group}
+              groupIndex={index}
+            />
           ))}
         </div>
-      ) : null}
+      )}
 
-      {analysisMode === "scrape" ||
-      (analysisMode === "report" && showRawData && reports.length > 0) ? (
-        <div className="flex flex-col gap-8">
+      {reports.length > 0 && (
+        <div className="space-y-4">
+           <h2 className="text-xl font-bold text-slate-300 px-2">原始抓取数据</h2>
           {reports.map((report, index) => (
-            <ReportBlock key={index} report={report} index={index} />
+            <ReportBlock
+              key={report.url || index}
+              report={report}
+              index={index}
+            />
           ))}
         </div>
-      ) : null}
+      )}
+
+      {(reports.length > 0 || crawlReportGroups.length > 0) && (
+        <div className="text-center pt-4">
+          <Button onClick={downloadFullReport} variant="outline" size="sm">
+            <Download className="w-4 h-4 mr-2" />
+            下载包含所有原始数据的完整报告
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

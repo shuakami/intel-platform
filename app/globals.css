@@ -157,7 +157,7 @@ body {
 }
 
 /* Citation Styling */
-.source-citation {
+.prose a.source-citation {
   @apply inline-block align-middle cursor-pointer;
   @apply px-2 py-0.5 mx-1;
   @apply bg-cyan-900/70 text-cyan-300 border border-cyan-700/80;
@@ -166,7 +166,7 @@ body {
   line-height: 1.2;
 }
 
-.source-citation:hover {
+.prose a.source-citation:hover {
   @apply bg-cyan-700/80 text-white border-cyan-600;
   @apply shadow-md shadow-cyan-900/50;
   transform: translateY(-1px);
