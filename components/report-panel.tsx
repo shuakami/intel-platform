@@ -30,6 +30,71 @@ import {
 } from "docx"
 import { saveAs } from "file-saver"
 
+const docStyles: IStylesOptions = {
+    paragraphStyles: [
+        {
+            id: "Normal",
+            name: "Normal",
+            basedOn: "Normal",
+            next: "Normal",
+            quickFormat: true,
+            run: { font: "Calibri", size: 22 }, // 11pt
+            paragraph: { spacing: { after: 120 } }, // 6pt
+        },
+        {
+            id: "Heading1",
+            name: "Heading 1",
+            basedOn: "Normal",
+            next: "Normal",
+            quickFormat: true,
+            run: { font: "Calibri", size: 32, bold: true, color: "2E74B5" }, // 16pt, dark blue
+            paragraph: { spacing: { before: 240, after: 120 } },
+        },
+        {
+            id: "Heading2",
+            name: "Heading 2",
+            basedOn: "Normal",
+            next: "Normal",
+            quickFormat: true,
+            run: { font: "Calibri", size: 26, bold: true, color: "2E74B5" }, // 13pt
+            paragraph: { spacing: { before: 240, after: 120 } },
+        },
+        {
+            id: "Heading3",
+            name: "Heading 3",
+            basedOn: "Normal",
+            next: "Normal",
+            quickFormat: true,
+            run: { font: "Calibri", size: 24, bold: true, color: "5B9BD5" }, // 12pt, light blue
+            paragraph: { spacing: { before: 120, after: 80 } },
+        },
+         {
+            id: "ListParagraph",
+            name: "List Paragraph",
+            basedOn: "Normal",
+            quickFormat: true,
+            paragraph: {
+                indent: { left: 720 },
+                spacing: { after: 80 }
+            },
+        },
+    ],
+    characterStyles: [
+        {
+            id: 'Hyperlink',
+            name: 'Hyperlink',
+            basedOn: 'DefaultParagraphFont',
+            run: {
+                color: '0000FF',
+                underline: {
+                    type: 'single',
+                    color: '0000FF',
+                },
+            },
+        },
+    ],
+};
+
 const robustHtmlToDocx = (htmlString: string): Paragraph[] => {
   const parser = new DOMParser()
   const doc = parser.parseFromString(htmlString, "text/html")
@@ -199,71 +264,6 @@ function FinalReportBlock({ reportContent }: { reportContent: string }) {
         });
     }
 
-    const docStyles: IStylesOptions = {
-        paragraphStyles: [
-            {
-                id: "Normal",
-                name: "Normal",
-                basedOn: "Normal",
-                next: "Normal",
-                quickFormat: true,
-                run: { font: "Calibri", size: 22 }, // 11pt
-                paragraph: { spacing: { after: 120 } }, // 6pt
-            },
-            {
-                id: "Heading1",
-                name: "Heading 1",
-                basedOn: "Normal",
-                next: "Normal",
-                quickFormat: true,
-                run: { font: "Calibri", size: 32, bold: true, color: "2E74B5" }, // 16pt, dark blue
-                paragraph: { spacing: { before: 240, after: 120 } },
-            },
-            {
-                id: "Heading2",
-                name: "Heading 2",
-                basedOn: "Normal",
-                next: "Normal",
-                quickFormat: true,
-                run: { font: "Calibri", size: 26, bold: true, color: "2E74B5" }, // 13pt
-                paragraph: { spacing: { before: 240, after: 120 } },
-            },
-            {
-                id: "Heading3",
-                name: "Heading 3",
-                basedOn: "Normal",
-                next: "Normal",
-                quickFormat: true,
-                run: { font: "Calibri", size: 24, bold: true, color: "5B9BD5" }, // 12pt, light blue
-                paragraph: { spacing: { before: 120, after: 80 } },
-            },
-             {
-                id: "ListParagraph",
-                name: "List Paragraph",
-                basedOn: "Normal",
-                quickFormat: true,
-                paragraph: {
-                    indent: { left: 720 },
-                    spacing: { after: 80 }
-                },
-            },
-        ],
-        characterStyles: [
-            {
-                id: 'Hyperlink',
-                name: 'Hyperlink',
-                basedOn: 'DefaultParagraphFont',
-                run: {
-                    color: '0000FF',
-                    underline: {
-                        type: 'single',
-                        color: '0000FF',
-                    },
-                },
-            },
-        ],
-    };
-
     const doc = new Document({
       sections: [{ children: docChildren }],
       styles: docStyles,
@@ -391,6 +391,18 @@ function ReportBlock({
     URL.revokeObjectURL(url)
   }
 
+  const downloadWord = async (html: string | null, title: string | null) => {
+    if (!html) return
+
+    const doc = new Document({
+      sections: [{ children: robustHtmlToDocx(html) }],
+      styles: docStyles,
+    });
+
+    const blob = await Packer.toBlob(doc);
+    saveAs(blob, `${title || "scraped-content"}.docx`);
+  };
+
   const isKnowledgeBaseFile = report.title?.startsWith("知识库文件:")
 
   return (
@@ -441,7 +453,16 @@ function ReportBlock({
                 }
               >
                 <Download className="w-3 h-3 mr-1" />
-                下载
+                下载MD
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="intel-button text-xs"
+                onClick={() => downloadWord(report.reportData, report.title)}
+              >
+                <FileSignature className="w-3 h-3 mr-1" />
+                下载Word
               </Button>
               <Button
                 variant="ghost"
@@ -565,6 +586,47 @@ export default function ReportPanel() {
     saveAs(blob, "full-intelligence-report.md")
   }
 
+  const downloadFullReportAsWord = async () => {
+    const docChildren: Paragraph[] = [];
+
+    // 1. Add AI-synthesized report if available
+    if (finalReport) {
+      docChildren.push(new Paragraph({ text: "AI 综合分析报告", style: "Heading1" }));
+      if (autoQuery) {
+        docChildren.push(new Paragraph({ text: `原始查询: ${autoQuery}`, style: "Normal" }));
+      }
+      const finalReportHtml = marked.parse(finalReport) as string;
+      docChildren.push(...robustHtmlToDocx(finalReportHtml));
+      docChildren.push(new Paragraph({ text: "" })); // Add a spacer
+    }
+
+    const allReports = [...reports, ...crawlReportGroups.flatMap(g => g.reports)];
+
+    // 2. Add raw data section if any raw data exists
+    if (allReports.length > 0) {
+      docChildren.push(new Paragraph({ text: "原始数据来源", style: "Heading1" }));
+    }
+
+    allReports.forEach((report, i) => {
+      docChildren.push(new Paragraph({ text: `来源 ${i + 1}: ${report.url || "N/A"}`, style: "Heading2" }));
+      if (report.rawMarkdown) {
+        const reportHtml = marked.parse(report.rawMarkdown) as string;
+        docChildren.push(...robustHtmlToDocx(reportHtml));
+      } else {
+        docChildren.push(new Paragraph({ text: "无内容", style: "Normal" }));
+      }
+      docChildren.push(new Paragraph({ text: "" })); // Add a spacer
+    });
+    
+    const doc = new Document({
+        sections: [{ children: docChildren }],
+        styles: docStyles,
+    });
+
+    const blob = await Packer.toBlob(doc);
+    saveAs(blob, "full-intelligence-report.docx");
+  };
+
   if (analysisStatus === "idle") {
     return (
       <div className="flex-center h-full text-slate-500">
@@ -623,10 +685,14 @@ export default function ReportPanel() {
       )}
 
       {(reports.length > 0 || crawlReportGroups.length > 0) && (
-        <div className="text-center pt-4">
+        <div className="text-center pt-4 flex justify-center items-center gap-4">
           <Button onClick={downloadFullReport} variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />
-            下载包含所有原始数据的完整报告
+            下载完整报告 (MD)
+          </Button>
+           <Button onClick={downloadFullReportAsWord} variant="outline" size="sm">
+            <FileSignature className="w-4 h-4 mr-2" />
+            下载完整报告 (Word)
           </Button>
         </div>
       )}
