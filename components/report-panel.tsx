@@ -424,45 +424,66 @@ function ReportBlock({
         </h2>
         <div className="flex-1"></div>
         <div className="flex items-center gap-2">
-          {analysisStatus === "active" && report.rawMarkdown && (
+          {report.rawMarkdown && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="intel-button text-xs"
+              onClick={() => setShowAnalysis(!showAnalysis)}
+            >
+              {showAnalysis ? (
+                <>
+                  <FileText className="w-3 h-3 mr-1" />
+                  查看原文
+                </>
+              ) : (
+                <>
+                  <BarChart3 className="w-3 h-3 mr-1" />
+                  查看分析
+                </>
+              )}
+            </Button>
+          )}
+
+          {/* Download Buttons */}
+          {report.htmlContent && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="intel-button text-xs"
+              onClick={() =>
+                downloadWord(report.htmlContent, `original-${report.title}`)
+              }
+              title="下载原始抓取内容"
+            >
+              <Download className="w-3 h-3 mr-1" />
+              下载原文
+            </Button>
+          )}
+
+          {report.rawMarkdown && (
             <>
               <Button
                 variant="ghost"
                 size="sm"
                 className="intel-button text-xs"
-                onClick={() => setShowAnalysis(!showAnalysis)}
+                onClick={() =>
+                  downloadMarkdown(report.rawMarkdown, `analysis-${report.title}`)
+                }
               >
-                {showAnalysis ? (
-                  <>
-                    <FileText className="w-3 h-3 mr-1" />
-                    原始内容
-                  </>
-                ) : (
-                  <>
-                    <BarChart3 className="w-3 h-3 mr-1" />
-                    分析报告
-                  </>
-                )}
+                <FileCode className="w-3 h-3 mr-1" />
+                下载分析 (MD)
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 className="intel-button text-xs"
                 onClick={() =>
-                  downloadMarkdown(report.rawMarkdown, report.title)
+                  downloadWord(report.reportData, `analysis-${report.title}`)
                 }
               >
-                <Download className="w-3 h-3 mr-1" />
-                下载MD
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="intel-button text-xs"
-                onClick={() => downloadWord(report.reportData, report.title)}
-              >
                 <FileSignature className="w-3 h-3 mr-1" />
-                下载Word
+                下载分析 (Word)
               </Button>
               <Button
                 variant="ghost"
@@ -476,6 +497,7 @@ function ReportBlock({
               </Button>
             </>
           )}
+
           {isKnowledgeBaseFile && (
             <Button
               variant="ghost"
